@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # Redis service (using official image - no custom Dockerfile needed)
+  redis:
+    image: redis:7-alpine
+    container_name: task-queue-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - task-queue-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # API service
+  api:
+    build:
+      context: .
+      dockerfile: api/main/Dockerfile
+    container_name: task-queue-api
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - task-queue-network
+    environment:
+      - REDIS_ADDR=redis:6379
+
+  # FIFO Workers (for FIFO queue experiment)
+  worker-fifo-1:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: task-queue-worker-fifo-1
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - task-queue-network
+    environment:
+      - REDIS_ADDR=redis:6379
+    command: ["./worker", "-queue=fifo"]
+    profiles:
+      - fifo
+
+  worker-fifo-2:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: task-queue-worker-fifo-2
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - task-queue-network
+    environment:
+      - REDIS_ADDR=redis:6379
+    command: ["./worker", "-queue=fifo"]
+    profiles:
+      - fifo
+
+  # Priority Workers (for priority queue experiment)
+  worker-priority-1:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: task-queue-worker-priority-1
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - task-queue-network
+    environment:
+      - REDIS_ADDR=redis:6379
+    command: ["./worker", "-queue=priority"]
+    profiles:
+      - priority
+
+  worker-priority-2:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: task-queue-worker-priority-2
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - task-queue-network
+    environment:
+      - REDIS_ADDR=redis:6379
+    command: ["./worker", "-queue=priority"]
+    profiles:
+      - priority
+
+networks:
+  task-queue-network:
+    driver: bridge
