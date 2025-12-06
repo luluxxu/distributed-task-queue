@@ -2,11 +2,14 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"os"
-	"encoding/json"
+	"time"
+
 	"github.com/go-redis/redis/v8"
-	models "github.com/yourusername/distributed-task-queue/src/api/models"  
+	models "github.com/yourusername/distributed-task-queue/src/api/models"
 )
 
 var (
@@ -14,11 +17,11 @@ var (
 	ctx = context.Background()
 )
 
-
 const (
 	FIFO_QUEUE_KEY     = "task:queue"
 	PRIORITY_QUEUE_KEY = "task:priority_queue"
 	TASK_RESULT_PREFIX = "task:result:"
+	RETRY_ZSET_KEY     = "task:retry"
 )
 
 func InitRedis() {
@@ -30,7 +33,7 @@ func InitRedis() {
 
 	// Initialize Redis client
 	rdb = redis.NewClient(&redis.Options{
-		Addr:     redisAddr,  // Use environment variable
+		Addr:     redisAddr, // Use environment variable
 		Password: "",
 		DB:       0,
 	})
@@ -173,7 +176,7 @@ func UpdateTaskStatus(taskID string, status string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	task.Status = status
 	return StoreTask(task)
 }
@@ -188,26 +191,88 @@ func ClearAllData() error {
 	if err := ClearFIFOQueue(); err != nil {
 		return err
 	}
-	
+
 	// Clear priority queue
 	if err := ClearPriorityQueue(); err != nil {
 		return err
 	}
-	
+
 	// Clear all tasks
 	keys, err := GetAllTaskKeys()
 	if err != nil {
 		return err
 	}
-	
+
 	if len(keys) > 0 {
 		return rdb.Del(ctx, keys...).Err()
 	}
-	
+
 	return nil
 }
 
 // GetRedisClient returns the Redis client (for advanced operations)
 func GetRedisClient() *redis.Client {
 	return rdb
+}
+
+// ============================================
+// Retry Queue Operations (for Experiment 3)
+// ============================================
+
+// ScheduleRetry adds a task ID to the retry ZSET with the next retry timestamp as score.
+func ScheduleRetry(taskID string, next time.Time) error {
+	return rdb.ZAdd(ctx, RETRY_ZSET_KEY, &redis.Z{
+		Score:  float64(next.Unix()),
+		Member: taskID,
+	}).Err()
+}
+
+// PopDueRetries pops up to 'limit' task IDs whose scheduled retry time is <= now.
+// It removes them from the retry ZSET and returns their IDs.
+func PopDueRetries(limit int) ([]string, error) {
+	now := float64(time.Now().Unix())
+
+	items, err := rdb.ZRangeByScore(ctx, RETRY_ZSET_KEY, &redis.ZRangeBy{
+		Min:   "-inf",
+		Max:   fmt.Sprintf("%f", now),
+		Count: int64(limit),
+	}).Result()
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+
+	members := make([]interface{}, len(items))
+	for i, it := range items {
+		members[i] = it
+	}
+	if err := rdb.ZRem(ctx, RETRY_ZSET_KEY, members...).Err(); err != nil {
+		return nil, err
+	}
+
+	return items, nil
+}
+
+// ReenqueueByType re-enqueues a task into the appropriate queue based on its JobType.
+// For SJF experiment we push back into the priority queue.
+
+func ReenqueueByType(taskID string) error {
+	task, err := GetTask(taskID)
+	if err != nil {
+		return err
+	}
+	if task == nil {
+		return fmt.Errorf("task %s not found", taskID)
+	}
+
+	switch task.JobType {
+	case "short":
+		return EnqueuePriority(taskID, "short")
+	case "long":
+		return EnqueuePriority(taskID, "long")
+	default:
+		return EnqueueFIFO(taskID)
+	}
 }
