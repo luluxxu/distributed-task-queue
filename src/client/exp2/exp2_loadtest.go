@@ -36,11 +36,27 @@ func main() {
 
 	// Wait for backlog to clear
 	fmt.Println("Waiting for backlog to clear...")
+	checkCount := 0
 	for {
 		backlog := getBacklog(client)
+		checkCount++
+
+		if backlog == -1 {
+			fmt.Printf("Error: Failed to get queue status (check #%d)\n", checkCount)
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+
 		if backlog == 0 {
+			fmt.Printf("✓ Backlog cleared! (checked %d times)\n", checkCount)
 			break
 		}
+
+		// Print progress every 10 checks (every 5 seconds)
+		if checkCount%10 == 0 {
+			fmt.Printf("  [Check #%d] Backlog: %d tasks remaining...\n", checkCount, backlog)
+		}
+
 		time.Sleep(500 * time.Millisecond)
 	}
 	clearTime := time.Now()

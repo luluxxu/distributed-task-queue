@@ -44,6 +44,13 @@ distributed-task-queue/
 - **Experiments**: Three experiment endpoints for different testing scenarios
 - **Client Load Tests**: Load testing scripts for each experiment
 
+### Quick Start
+
+1. **Start Redis**: `docker-compose up -d redis`
+2. **Start API**: `go run ./api/main/main.go`
+3. **Start Worker**: `go run ./worker/worker.go --queue=fifo --mode=simple`
+4. **Run Tests**: See [TESTING.md](./TESTING.md) for detailed testing guide
+
 ## Experiment 1
 
 Run experiment 1 with FIFO queue

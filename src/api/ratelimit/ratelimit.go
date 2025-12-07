@@ -9,7 +9,7 @@ import (
 )
 
 // maximum number of requests allowed per client per minute
-const rateLimitPerMinute = 100
+const rateLimitPerMinute = 10000
 
 // RateLimitResult contains the result of a rate limit check
 type RateLimitResult struct {
