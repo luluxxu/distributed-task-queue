@@ -22,6 +22,8 @@ const (
 	PRIORITY_QUEUE_KEY = "task:priority_queue"
 	TASK_RESULT_PREFIX = "task:result:"
 	RETRY_ZSET_KEY     = "task:retry"
+	// TASK_TTL is the expiration time for task storage (7 days)
+	TASK_TTL = 7 * 24 * time.Hour
 )
 
 func InitRedis() {
@@ -120,7 +122,7 @@ func ClearPriorityQueue() error {
 // Task Storage Operations (Redis STRING)
 // ============================================
 
-// StoreTask stores a task in Redis as a JSON string
+// StoreTask stores a task in Redis as a JSON string with TTL
 func StoreTask(task *models.Task) error {
 	taskJSON, err := json.Marshal(task)
 	if err != nil {
@@ -128,7 +130,7 @@ func StoreTask(task *models.Task) error {
 	}
 
 	key := TASK_RESULT_PREFIX + task.ID
-	return rdb.Set(ctx, key, taskJSON, 0).Err()
+	return rdb.Set(ctx, key, taskJSON, TASK_TTL).Err()
 }
 
 // GetTask retrieves a task from Redis by ID

@@ -1,6 +1,7 @@
 package experiments
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -25,18 +26,25 @@ func postTaskFIFO(c *gin.Context) {
 
 	// rate limit
 	clientID := c.ClientIP()
-	allowed, remaining, err := rl.Allow(c.Request.Context(), clientID)
+	rateLimitResult, err := rl.Allow(c.Request.Context(), clientID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "rate limiter error",
 		})
 		return
 	}
-	if !allowed {
+
+	// Set standard rate limit headers for all responses
+	c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", rateLimitResult.Limit))
+	c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", rateLimitResult.Remaining))
+
+	if !rateLimitResult.Allowed {
+		// Set Retry-After header when rate limited
+		c.Header("Retry-After", fmt.Sprintf("%d", rateLimitResult.RetryAfter))
 		c.JSON(http.StatusTooManyRequests, gin.H{
 			"error":       "rate limit exceeded",
-			"remaining":   remaining,
-			"retry_after": 60,
+			"remaining":   rateLimitResult.Remaining,
+			"retry_after": rateLimitResult.RetryAfter,
 		})
 		return
 	}
@@ -130,18 +138,25 @@ func postTaskFIFO(c *gin.Context) {
 // postTaskPQ handles task submission to priority queue
 func postTaskPQ(c *gin.Context) {
 	clientID := c.ClientIP()
-	allowed, remaining, err := rl.Allow(c.Request.Context(), clientID)
+	rateLimitResult, err := rl.Allow(c.Request.Context(), clientID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "rate limiter error",
 		})
 		return
 	}
-	if !allowed {
+
+	// Set standard rate limit headers for all responses
+	c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", rateLimitResult.Limit))
+	c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", rateLimitResult.Remaining))
+
+	if !rateLimitResult.Allowed {
+		// Set Retry-After header when rate limited
+		c.Header("Retry-After", fmt.Sprintf("%d", rateLimitResult.RetryAfter))
 		c.JSON(http.StatusTooManyRequests, gin.H{
 			"error":       "rate limit exceeded",
-			"remaining":   remaining,
-			"retry_after": 60,
+			"remaining":   rateLimitResult.Remaining,
+			"retry_after": rateLimitResult.RetryAfter,
 		})
 		return
 	}

@@ -15,6 +15,7 @@ func main() {
 	router := gin.Default()
 
 	experiments.Experiment1(router)
+	experiments.Experiment2(router) // Adds queue status endpoint
 	// "Run()" attaches router to an http server and start the server
 	// router.Run("localhost:8080")
 	router.Run(":8080")

@@ -1,5 +1,49 @@
 # distributed-task-queue
 
+## Project Structure
+
+```
+distributed-task-queue/
+├── README.md
+└── src/
+    ├── api/                          # API Service
+    │   ├── experiments/              # Experiment endpoints
+    │   │   ├── experiment1.go      # Exp1: Task length distribution
+    │   │   ├── experiment2.go       # Exp2: Worker scaling
+    │   │   └── experiment3.go       # Exp3: Retry mechanism
+    │   ├── main/                    # API main entry point
+    │   │   ├── main.go
+    │   │   └── Dockerfile
+    │   ├── models/                  # Data models
+    │   │   └── models.go
+    │   └── ratelimit/               # Rate limiting
+    │       └── ratelimit.go
+    ├── client/                       # Load testing clients
+    │   ├── exp1/
+    │   │   └── exp1_loadtest.go
+    │   ├── exp2/
+    │   │   └── exp2_loadtest.go
+    │   └── exp3/
+    │       └── exp3_loadtest.go
+    ├── worker/                       # Worker service
+    │   ├── worker.go
+    │   └── Dockerfile
+    ├── redis/                        # Redis operations
+    │   └── redis.go
+    ├── docker-compose.yml
+    ├── go.mod
+    └── go.sum
+```
+
+### Components
+
+- **API Service** (`api/main/main.go`): HTTP API server with task submission and status endpoints
+- **Worker** (`worker/worker.go`): Task processor that pulls from Redis queue
+- **Redis** (`redis/redis.go`): Queue and result store operations
+- **Rate Limiter** (`api/ratelimit/ratelimit.go`): Per-client rate limiting
+- **Experiments**: Three experiment endpoints for different testing scenarios
+- **Client Load Tests**: Load testing scripts for each experiment
+
 ## Experiment 1
 
 Run experiment 1 with FIFO queue
@@ -88,6 +132,37 @@ go run ./worker/worker.go --queue=fifo --mode=simple
 
 # Start experiment 1 test
 go run ./client/exp1/exp1_loadtest.go
+```
+
+## Experiment 2: Worker Scaling and Backlog Clearance
+
+Run experiment 2 with exp2_loadtest.go
+```
+cd src
+
+# Start Redis
+docker-compose up -d redis
+
+# Start API Service
+go run ./api/main/main.go
+
+# Start N workers (test with different counts: 1, 2, 5, 10)
+# Example with 1 worker:
+go run ./worker/worker.go --queue=fifo --mode=simple
+
+# Example with 5 workers (run in separate terminals):
+# Terminal 1: go run ./worker/worker.go --queue=fifo --mode=simple
+# Terminal 2: go run ./worker/worker.go --queue=fifo --mode=simple
+# Terminal 3: go run ./worker/worker.go --queue=fifo --mode=simple
+# Terminal 4: go run ./worker/worker.go --queue=fifo --mode=simple
+# Terminal 5: go run ./worker/worker.go --queue=fifo --mode=simple
+
+# Start experiment 2 test (submits 500 tasks and measures clearance time)
+go run ./client/exp2/exp2_loadtest.go
+
+# Compare results with different worker counts to see scaling effects
+# clean up 
+docker-compose down
 ```
 
 ## Experiment 3: Retry Mechanism
