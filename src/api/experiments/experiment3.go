@@ -1,22 +1,11 @@
 package experiments
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"net/http"
+	"github.com/gin-gonic/gin"
 )
 
-func main() {
-	count := 50
+func Experiment3(router *gin.Engine) {
 
-	for i := 0; i < count; i++ {
-		body, _ := json.Marshal(map[string]string{
-			"job_type": "short",
-			"payload":  fmt.Sprintf("data-%d", i),
-		})
-
-		resp, _ := http.Post("http://localhost:8080/task", "application/json", bytes.NewReader(body))
-		fmt.Println("Submitted", i, resp.Status)
-	}
+	// Reuse experiment1 api endpoints to test experiment 3 logic
+	Experiment1(router)
 }

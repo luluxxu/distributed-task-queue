@@ -25,26 +25,24 @@ func main() {
 	// queueType := "fifo"
 	// queueType := "priority"
 	queueType := flag.String("queue", "fifo", "Queue type: fifo or priority")
+	mode := flag.String("mode", "simple", "simple or retry")
 	flag.Parse()
 
 	r.InitRedis()
 	defer r.CloseRedis()
 
-	StartWorkerWithQueue(*queueType)
-}
-
-// StartWorker starts a worker that processes tasks from FIFO queue
-func StartWorker() {
-	StartWorkerWithQueue("fifo")
+	StartWorkerWithQueue(*queueType, *mode)
 }
 
 // StartWorkerWithQueue starts a worker with specified queue type
 // queueType can be "fifo" or "priority"
-func StartWorkerWithQueue(queueType string) {
+func StartWorkerWithQueue(queueType, mode string) {
 	log.Printf("Worker started (queue: %s), polling for tasks...", queueType)
 
 	//Start a background goroutine to handle retry scheduling
-	startRetryScheduler()
+	if mode == "retry" {
+		startRetryScheduler()
+	}
 
 	// Infinite loop: continuously poll for tasks
 	for {
@@ -79,13 +77,56 @@ func StartWorkerWithQueue(queueType string) {
 			continue
 		}
 
-		// Process the task
-		processTask(task)
+		if mode == "retry" {
+			processTaskWithFailureAndRetry(task)
+		} else {
+			processTaskSimple(task)
+		}
 	}
 }
 
-// processTask executes a task and updates its status
-func processTask(task *models.Task) {
+// processTask without retry
+func processTaskSimple(task *models.Task) {
+	log.Printf("Processing task: %s (type: %s)", task.ID, task.JobType)
+
+	// Update status to running
+	now := time.Now()
+	task.Status = "running"
+	task.StartedAt = &now
+	err := r.StoreTask(task)
+	if err != nil {
+		log.Printf("Failed to update task status to running: %v", err)
+		return
+	}
+
+	// Simulate work based on job type
+	if task.JobType == "short" {
+		time.Sleep(50 * time.Millisecond) // Short job: 50ms
+	} else if task.JobType == "long" {
+		time.Sleep(3 * time.Second) // Long job: 3 seconds
+	} else {
+		// Unknown job type, default to short
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	// Update status to success
+	completed := time.Now()
+	task.Status = "success"
+	task.CompletedAt = &completed
+	task.Result = "Task completed successfully"
+	err = r.StoreTask(task)
+	if err != nil {
+		log.Printf("Failed to update task status to success: %v", err)
+		return
+	}
+
+	// Calculate and log latency
+	latency := completed.Sub(task.SubmittedAt)
+	log.Printf("Completed %s task %s (latency: %v)", task.JobType, task.ID, latency)
+}
+
+// processTask with retry
+func processTaskWithFailureAndRetry(task *models.Task) {
 	log.Printf("Processing task: %s (type: %s)", task.ID, task.JobType)
 
 	// Update status to running
@@ -108,11 +149,11 @@ func processTask(task *models.Task) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	// 20% chance of transient failure (can be retried)
-	u := rng.Float64()
+	u := rng.Float64() // random float number
 	if u < permanentRate {
 		finalizeFailed(task, "permanent error")
 		return
-	} else if u < permanentRate+transientRate {
+	} else if u < permanentRate+transientRate { //  0.05 ≤ u < 0.25
 		handleTransient(task)
 		return
 	}
@@ -133,45 +174,8 @@ func processTask(task *models.Task) {
 	log.Printf("Completed %s task %s (latency: %v)", task.JobType, task.ID, latency)
 }
 
-// ProcessTaskWithFailure is for Experiment 3 (with failure injection)
-// Not needed for Experiment 1, but included for completeness
-func ProcessTaskWithFailure(task *models.Task, failureRate float64) {
-	log.Printf("Processing task: %s (type: %s)", task.ID, task.JobType)
-
-	// Update status to running
-	now := time.Now()
-	task.Status = "running"
-	task.StartedAt = &now
-	r.StoreTask(task)
-
-	// Simulate work
-	if task.JobType == "short" {
-		time.Sleep(50 * time.Millisecond)
-	} else {
-		time.Sleep(3 * time.Second)
-	}
-
-	// Simulate failure (for Experiment 3)
-	// For Experiment 1, we don't use this - all tasks succeed
-	// if rand.Float64() < failureRate {
-	//     task.Status = "failed"
-	//     task.Error = "simulated failure"
-	// } else {
-	//     task.Status = "success"
-	//     task.Result = "Task completed successfully"
-	// }
-
-	// For now, always succeed
-	completed := time.Now()
-	task.Status = "success"
-	task.CompletedAt = &completed
-	task.Result = "Task completed successfully"
-	r.StoreTask(task)
-
-	latency := completed.Sub(task.SubmittedAt)
-	log.Printf("Completed %s task %s (latency: %v)", task.JobType, task.ID, latency)
-}
-
+// For tasks that are ready to be retried.
+// Tasks whose retry time has arrived, and re-enqueues them back into the appropriate queue.
 func startRetryScheduler() {
 	go func() {
 		// Create a ticker that fires every 200ms

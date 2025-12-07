@@ -2,10 +2,9 @@ package main
 
 import (
 	"github.com/gin-gonic/gin"
-	redis "github.com/yourusername/distributed-task-queue/src/redis"
 	experiments "github.com/yourusername/distributed-task-queue/src/api/experiments"
+	redis "github.com/yourusername/distributed-task-queue/src/redis"
 )
-
 
 func main() {
 	// Initialize Redis
@@ -14,10 +13,9 @@ func main() {
 
 	// initialize Gin router using Default
 	router := gin.Default()
-	
+
 	experiments.Experiment1(router)
 	// "Run()" attaches router to an http server and start the server
 	// router.Run("localhost:8080")
 	router.Run(":8080")
 }
-

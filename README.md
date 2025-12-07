@@ -66,3 +66,51 @@ curl -X POST http://localhost:8080/task/pq \
 # Use task ID from response to check status
 curl http://localhost:8080/task/{task id}
 ```
+
+
+## Experiment 1 
+
+Run experiment 1 with exp1_loadtest.go
+```
+cd src
+
+# Start Redis
+docker-compose up -d redis
+
+# Start API Service
+go run ./api/main/main.go
+
+# Start Worker.go with PQ
+go run ./worker/worker.go --queue=priority --mode=simple  
+
+# Start Worker.go with fifo
+go run ./worker/worker.go --queue=fifo --mode=simple
+
+# Start experiment 1 test
+go run ./client/exp1/exp1_loadtest.go
+```
+
+## Experiment 3: Retry Mechanism
+
+Run experiment 3 with exp3_loadtest.go
+```
+cd src
+
+# Start Redis
+docker-compose up -d redis
+
+# Start API Service
+go run ./api/main/main.go
+
+# Start Worker.go with fifo
+go run ./worker/worker.go --queue=fifo --mode=retry
+
+# Start Worker.go with pq
+go run ./worker/worker.go --queue=priority --mode=retry
+
+# Start experiment 3 test
+go run ./client/exp3/exp3_loadtest.go
+
+# clean up 
+docker-compose down
+```
