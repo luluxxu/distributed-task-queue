@@ -1,251 +1,331 @@
-# Deployment Guide
+1. Overview
 
-## Prerequisites
+Cloud architecture (minimal viable version):
 
-1. **AWS Account** with appropriate permissions
-2. **AWS CLI** configured (`aws configure`)
-3. **Terraform** >= 1.0 installed
-4. **Docker images** built and pushed to ECR or Docker Hub
-5. **AWS Key Pair** created in your region
+VPC + subnets
 
-## Step 1: Prepare Docker Images
+Redis EC2 (private IP, no public exposure)
 
-### Build and Push API Image
+API EC2 (public IP, exposes port 8080)
 
-```bash
+User data script installs Docker, pulls luluxxu/dtq-api:latest, runs API with REDIS_ADDR=<redis_private_ip>:6379
+
+Worker Auto Scaling Group (ASG)
+
+One or more EC2 instances, each runs luluxxu/dtq-worker:latest
+
+Worker connects to Redis and consumes tasks from the queue
+
+Your local machine:
+
+Runs the Go client (exp1/exp2/exp3), pointing to the cloud API endpoint.
+
+2. Prerequisites
+
+On your local machine:
+
+AWS account with permissions to create:
+
+EC2 instances
+
+VPC, subnets, security groups
+
+Auto Scaling Group
+
+AWS CLI installed and configured:
+
+aws configure
+# Make sure region matches your Terraform config, e.g. us-west-2
+
+
+Terraform ≥ 1.0 installed:
+
+terraform version
+
+
+Docker installed.
+
+AWS EC2 key pair created in the same region (e.g. us-west-2)
+
+In AWS Console → EC2 → Key Pairs → Create key pair
+
+Download taskqueue-key.pem to local, like ~/.ssh/taskqueue-key.pem
+
+In terraform.tfvars ：key_name = "taskqueue-key"
+
+3. Build & Push Docker Images (Docker Hub)
+
+One-time setup: Build images on your local machine, then push to Docker Hub public repository so EC2 instances in the cloud can pull them.
+
+
+From the repo root:
+
 cd src
 
-# Build API image
-docker build -f api/main/Dockerfile -t your-ecr-repo/api:latest .
+3.1 API image
+# Build for linux/amd64 (EC2 uses x86_64 architecture)
+docker build \
+  --platform linux/amd64 \
+  -f api/main/Dockerfile \
+  -t luluxxu/dtq-api:latest \
+  .
 
-# Tag for ECR (replace with your account ID and region)
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
-docker tag your-ecr-repo/api:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/api:latest
-docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/api:latest
-```
+# Push to Docker Hub
+docker push luluxxu/dtq-api:latest
 
-### Build and Push Worker Image
+3.2 Worker image
+docker build \
+  --platform linux/amd64 \
+  -f worker/Dockerfile \
+  -t luluxxu/dtq-worker:latest \
+  .
 
-```bash
-# Build worker image
-docker build -f worker/Dockerfile -t your-ecr-repo/worker:latest .
+docker push luluxxu/dtq-worker:latest
 
-# Tag and push
-docker tag your-ecr-repo/worker:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/worker:latest
-docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/worker:latest
-```
+If you're not using luluxxu/..., change it to your own Docker Hub username and update api_image / worker_image in terraform.tfvars accordingly.
 
-### Alternative: Use Docker Hub
-
-If using Docker Hub instead of ECR:
-
-```bash
-docker tag your-ecr-repo/api:latest your-dockerhub-username/api:latest
-docker push your-dockerhub-username/api:latest
-```
-
-## Step 2: Configure Terraform
-
-```bash
-cd terraform
-
-# Copy example variables file
+4. Configure Terraform Variables
+cd ../terraform
 cp terraform.tfvars.example terraform.tfvars
 
-# Edit terraform.tfvars with your values
-# - key_name: Your AWS key pair name
-# - api_image: Your ECR/Docker Hub image URL
-# - worker_image: Your ECR/Docker Hub image URL
-```
 
-## Step 3: Deploy Infrastructure
+Edit terraform.tfvars (key fields example):
 
-```bash
+aws_region = "us-west-2"
+
+# EC2 Key Pair name (must exist in AWS)
+key_name   = "taskqueue-key"
+
+# Public Docker Hub images (already pushed)
+api_image    = "luluxxu/dtq-api:latest"
+worker_image = "luluxxu/dtq-worker:latest"
+redis_image  = "redis:7-alpine"
+
+# Worker scaling (for Experiment 2)
+worker_min_size         = 1
+worker_max_size         = 10
+worker_desired_capacity = 1
+
+# Worker behavior
+worker_queue_type = "fifo"   # or "priority"
+worker_mode       = "simple" # or "retry"
+
+# (Optional) Restrict API access to your IP
+# allowed_cidr = "YOUR_IP/32"
+
+5. Deploy with Terraform
+
+Execute in the terraform/ directory:
+
 # Initialize Terraform
 terraform init
 
 # Review the plan
 terraform plan
 
-# Apply the configuration
+# Actually create resources
 terraform apply
+# When prompted "Enter a value for var.key_name", enter the key_name you configured in tfvars (e.g., taskqueue-key)
+# Enter yes to confirm
 
-# Type 'yes' when prompted
-```
+After success, you'll see output similar to:
 
-## Step 4: Get API Endpoint
+Apply complete! Resources: X added, Y changed, Z destroyed.
 
-After deployment completes:
+Outputs:
 
-```bash
-# Get API endpoint
+api_endpoint   = "http://52.41.50.47:8080"
+api_public_ip  = "52.41.50.47"
+redis_private_ip = "10.0.1.8"
+worker_asg_name  = "task-queue-worker-asg"
+...
+
+Note down:
+
+api_endpoint / api_public_ip
+
+redis_private_ip
+
+worker_asg_name
+
+6. Smoke Test: Check API & Queue
+
+On your local machine:
+
+cd terraform
+
+# Get API Endpoint
 terraform output api_endpoint
+# Or just the IP
+terraform output -raw api_public_ip
 
-# Or get all outputs
-terraform output
-```
+Quick test:
 
-The output will show:
-```
-api_endpoint = "http://54.123.45.67:8080"
-```
+API_IP=$(terraform output -raw api_public_ip)
+curl http://$API_IP:8080/queue/status
+# Expected output similar to:
+# {"fifo_queue_length":0,"priority_queue_length":0,"total_backlog":0}
 
-## Step 5: Update Client Code (Optional)
+If JSON is returned, it means:
 
-You can either:
+Docker has started the API container on EC2
 
-### Option A: Use Environment Variable
+API can connect to Redis
 
-Modify client code to read from environment:
+7. Run Experiments from Your Laptop
+7.1 Common setup
 
-```go
-baseURL := os.Getenv("API_ENDPOINT")
-if baseURL == "" {
-    baseURL = "http://localhost:8080"
-}
-```
+In your local terminal:
 
-Then run:
-```bash
-export API_ENDPOINT="http://<api-public-ip>:8080"
-go run ./client/exp1/exp1_loadtest.go
-```
+cd ../src
+export API_ENDPOINT="http://$(cd ../terraform && terraform output -raw api_public_ip):8080"
+echo $API_ENDPOINT
+# Confirm it's something like http://52.41.50.47:8080
 
-### Option B: Hardcode for Testing
+All client programs will prioritize using API_ENDPOINT, otherwise default to http://localhost:8080.
 
-Temporarily modify client files:
-
-```go
-const baseURL = "http://<api-public-ip>:8080"
-```
-
-## Step 6: Run Experiments
-
-### Experiment 1: Task Length Distribution
-
-```bash
+7.2 Experiment 1 – Task Length Distribution
 cd src
 export API_ENDPOINT="http://$(cd ../terraform && terraform output -raw api_public_ip):8080"
+
 go run ./client/exp1/exp1_loadtest.go
-```
 
-### Experiment 2: Worker Scaling
+You should see logs similar to:
 
-**Test with 1 worker:**
-```bash
-# Workers start with desired_capacity=1 by default
+Using API endpoint: http://52.41.50.47:8080
+Submitted 0 to http://52.41.50.47:8080/task/fifo status: 201 Created
+Submitted 1 to http://52.41.50.47:8080/task/pq status: 201 Created
+...
+
+Cloud queue status:
+
+curl http://$API_ENDPOINT/queue/status
+# {"fifo_queue_length":..., "priority_queue_length":..., "total_backlog":...}
+
+Worker logs (optional, SSH into worker instance to view):
+
+ssh -i ~/.ssh/taskqueue-key.pem ec2-user@<worker_public_ip>
+sudo docker logs -f dtq-worker
+
+7.3 Experiment 2 – Worker Scaling & Backlog Clearance
+
+Set different worker counts to test how long it takes to clear 500 tasks (the exp2 client will test this for you).
+
+1 worker:
+
 cd terraform
-terraform apply -var="worker_desired_capacity=1"
-cd ../src
-go run ./client/exp2/exp2_loadtest.go
-```
+aws autoscaling set-desired-capacity \
+  --auto-scaling-group-name $(terraform output -raw worker_asg_name) \
+  --desired-capacity 1 \
+  --region us-west-2
 
-**Test with 5 workers:**
-```bash
-cd terraform
-terraform apply -var="worker_desired_capacity=5"
-# Wait ~2 minutes for instances to launch
-cd ../src
-go run ./client/exp2/exp2_loadtest.go
-```
+Wait 1–2 minutes for EC2 to start, then run on your local machine:
 
-**Or use AWS CLI:**
-```bash
+cd ../src
+export API_ENDPOINT="http://$(cd ../terraform && terraform output -raw api_public_ip):8080"
+go run ./client/exp2/exp2_loadtest.go
+
+5 workers:
+
+cd ../terraform
 aws autoscaling set-desired-capacity \
   --auto-scaling-group-name $(terraform output -raw worker_asg_name) \
   --desired-capacity 5 \
-  --region us-east-1
-```
+  --region us-west-2
 
-### Experiment 3: Retry Mechanism
+Run exp2_loadtest.go again and compare clearance time and throughput.
 
-```bash
-# Update worker mode to retry
+7.4 Experiment 3 – Retry & Failure Injection
+
+To switch to retry mode, there are two ways:
+
+A. Use Terraform variables (recommended for reports)
+
+Edit terraform.tfvars:
+
+worker_mode = "retry"
+
+Then:
+
 cd terraform
-terraform apply -var="worker_mode=retry"
+terraform apply
+# This will make new worker instances start with `-mode=retry`
+
+Execute on local machine:
+
 cd ../src
+export API_ENDPOINT="http://$(cd ../terraform && terraform output -raw api_public_ip):8080"
 go run ./client/exp3/exp3_loadtest.go
-```
 
-## Step 7: Monitor and Debug
+B. Temporarily adjust manually on a worker EC2 (for debugging)
 
-### Check API Status
+SSH into worker EC2 and manually use:
 
-```bash
-API_IP=$(cd terraform && terraform output -raw api_public_ip)
-curl http://$API_IP:8080/queue/status
-```
+sudo docker rm -f dtq-worker 2>/dev/null || true
+sudo docker run -d --restart always \
+  --name dtq-worker \
+  -e REDIS_ADDR="10.0.1.8:6379" \
+  luluxxu/dtq-worker:latest \
+  ./worker -queue=fifo -mode=retry
 
-### Check Worker Instances
+8. SSH into API / Worker (Optional)
+API instance
+cd terraform
+API_IP=$(terraform output -raw api_public_ip)
 
-```bash
+ssh -i ~/.ssh/taskqueue-key.pem ec2-user@$API_IP
+# View containers
+sudo docker ps
+sudo docker logs dtq-api --tail 50
+
+Worker instances
 aws ec2 describe-instances \
   --filters "Name=tag:Name,Values=task-queue-worker" \
-  --query 'Reservations[*].Instances[*].[InstanceId,State.Name,PrivateIpAddress]' \
+  --region us-west-2 \
+  --query 'Reservations[*].Instances[*].[InstanceId,State.Name,PrivateIpAddress,PublicIpAddress]' \
   --output table
-```
 
-### SSH to Instances
+# then for some PublicIp:
+ssh -i ~/.ssh/taskqueue-key.pem ec2-user@<worker_public_ip>
+sudo docker ps
+sudo docker logs dtq-worker --tail 50
 
-```bash
-# Get instance IPs
-API_IP=$(cd terraform && terraform output -raw api_public_ip)
-REDIS_IP=$(aws ec2 describe-instances \
-  --filters "Name=tag:Name,Values=task-queue-redis" \
-  --query 'Reservations[0].Instances[0].PublicIpAddress' \
-  --output text)
+9. Tear Down
 
-# SSH to API
-ssh -i ~/.ssh/your-key.pem ec2-user@$API_IP
+After experiments, don't forget to destroy cloud resources to avoid charges:
 
-# Check API logs
-sudo docker logs api
-
-# SSH to Redis
-ssh -i ~/.ssh/your-key.pem ec2-user@$REDIS_IP
-
-# Check Redis
-sudo docker exec -it redis redis-cli ping
-sudo docker exec -it redis redis-cli LLEN task:queue
-```
-
-## Step 8: Cleanup
-
-```bash
 cd terraform
 terraform destroy
+# Enter yes to confirm
 
-# Type 'yes' when prompted
-```
+10. Tips / Troubleshooting
 
-## Troubleshooting
+curl 8080 connection fails:
 
-### API not accessible
+Check if Terraform apply was successful
 
-1. Check security group allows port 8080 from your IP
-2. Check API instance is running: `aws ec2 describe-instances --filters "Name=tag:Name,Values=task-queue-api"`
-3. Check API logs: SSH to instance and run `sudo docker logs api`
+Check if terraform output api_public_ip matches the IP you're curling
 
-### Workers not processing tasks
+SSH into API instance and check:
 
-1. Check workers can reach Redis (same VPC, security group allows 6379)
-2. Check worker logs: SSH to worker instance and run `sudo docker logs worker`
-3. Verify REDIS_ADDR environment variable
+sudo docker ps to see if dtq-api exists
 
-### Docker images not found
+sudo ss -tulpn | grep 8080
 
-1. Verify images exist in ECR/Docker Hub
-2. Check IAM role has ECR permissions (if using ECR)
-3. Check user_data script logs: `/var/log/user-data.log`
+API container won't start:
 
-## Cost Estimation
+Most likely an image architecture or REDIS_ADDR issue:
 
-Approximate monthly costs (us-east-1):
+Ensure images are built with --platform linux/amd64
 
-- Redis (t3.micro): ~$7.50/month
-- API (t3.small): ~$15/month
-- Workers (t3.micro x 1-10): ~$7.50-$75/month
-- Data transfer: Minimal for experiments
+Ensure user_data uses -e REDIS_ADDR="${redis_private_ip}:6379"
 
-**Total**: ~$30-100/month depending on worker count
+Tasks are never consumed:
 
+Check if worker is running:
+
+sudo docker ps to see if dtq-worker exists
+
+sudo docker logs dtq-worker to see if it shows "Processing task …"
+
+Confirm worker environment variable REDIS_ADDR points to the correct redis_private_ip:6379

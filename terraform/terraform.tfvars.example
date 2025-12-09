@@ -1,13 +1,12 @@
-# Copy this file to terraform.tfvars and fill in your values
 
-aws_region = "us-east-1"
+aws_region = "us-west-2"
 
 # AWS Key Pair name (must exist in your AWS account)
-key_name = "your-key-pair-name"
+key_name = "taskqueue-key"
 
 # Docker images (update with your ECR repository or Docker Hub)
-api_image    = "123456789012.dkr.ecr.us-east-1.amazonaws.com/api:latest"
-worker_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/worker:latest"
+api_image    = "luluxxu/dtq-api:latest"
+worker_image = "luluxxu/dtq-worker:latest"
 redis_image  = "redis:7-alpine"
 
 # Worker scaling configuration (for Experiment 2)

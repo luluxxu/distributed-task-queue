@@ -1,41 +1,21 @@
 #!/bin/bash
-# User data script for Worker instance
-
-set -e
-
-# Update system
+set -xe
 yum update -y
 
-# Install Docker and netcat (for health checks)
-yum install -y docker nc
-systemctl start docker
+yum install -y docker
+
 systemctl enable docker
-usermod -a -G docker ec2-user
 
-# Wait for Redis to be ready (retry logic)
-RETRY_COUNT=0
-MAX_RETRIES=30
-while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-  if nc -z ${redis_addr} 6379; then
-    echo "Redis is ready"
-    break
-  fi
-  echo "Waiting for Redis... ($RETRY_COUNT/$MAX_RETRIES)"
-  sleep 10
-  RETRY_COUNT=$((RETRY_COUNT + 1))
-done
+systemctl start docker
+docker pull luluxxu/dtq-worker:latest
 
-# Pull worker image
-docker pull ${worker_image}
+# 停止并删除旧容器（如果存在）
+docker stop dtq-worker 2>/dev/null || true
+docker rm dtq-worker 2>/dev/null || true
 
-# Run worker container
-docker run -d \
-  --name worker \
-  --restart unless-stopped \
-  -e REDIS_ADDR="${redis_addr}:6379" \
-  ${worker_image} \
-  ./worker -queue=${queue_type} -mode=${mode}
-
-# Log completion
-echo "Worker container started successfully" >> /var/log/user-data.log
-
+docker run -d --restart always \
+  --name dtq-worker \
+  -e REDIS_ADDR="${redis_private_ip}:6379" \
+  luluxxu/dtq-worker:latest \
+  -queue=${queue_type} \
+  -mode=${mode}

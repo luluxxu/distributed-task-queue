@@ -5,13 +5,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 )
 
 func main() {
+	// get API endpoint from environment variable
+	baseURL := os.Getenv("API_ENDPOINT")
+	if baseURL == "" {
+		baseURL = "http://localhost:8080"
+	}
+	fmt.Println("Using API endpoint:", baseURL)
+	// build URLs
+	urlFIFO := baseURL + "/task/fifo"
+	urlPQ := baseURL + "/task/pq"
+
 	client := &http.Client{Timeout: 5 * time.Second}
-	urlFIFO := "http://localhost:8080/task/fifo"
-	urlPQ := "http://localhost:8080/task/pq"
 
 	total := 200 // total tasks
 	for i := 0; i < total; i++ {

@@ -180,8 +180,8 @@ resource "aws_instance" "api" {
   vpc_security_group_ids = [aws_security_group.api.id]
 
   user_data = templatefile("${path.module}/user_data/api.sh", {
-    api_image  = var.api_image
-    redis_addr = aws_instance.redis.private_ip
+    api_image        = var.api_image
+    redis_private_ip = aws_instance.redis.private_ip
   })
 
   tags = merge(var.tags, {
@@ -189,49 +189,6 @@ resource "aws_instance" "api" {
   })
 
   depends_on = [aws_instance.redis]
-}
-
-# IAM Role for Worker ASG (for ECR access if needed)
-resource "aws_iam_role" "worker" {
-  name = "task-queue-worker-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "ec2.amazonaws.com"
-      }
-    }]
-  })
-
-  tags = var.tags
-}
-
-# IAM Policy for ECR access (if using ECR)
-resource "aws_iam_role_policy" "worker_ecr" {
-  name = "task-queue-worker-ecr-policy"
-  role = aws_iam_role.worker.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "ecr:GetAuthorizationToken",
-        "ecr:BatchCheckLayerAvailability",
-        "ecr:GetDownloadUrlForLayer",
-        "ecr:BatchGetImage"
-      ]
-      Resource = "*"
-    }]
-  })
-}
-
-resource "aws_iam_instance_profile" "worker" {
-  name = "task-queue-worker-profile"
-  role = aws_iam_role.worker.name
 }
 
 # Worker Launch Template
@@ -243,15 +200,11 @@ resource "aws_launch_template" "worker" {
 
   vpc_security_group_ids = [aws_security_group.worker.id]
 
-  iam_instance_profile {
-    name = aws_iam_instance_profile.worker.name
-  }
-
   user_data = base64encode(templatefile("${path.module}/user_data/worker.sh", {
-    worker_image  = var.worker_image
-    redis_addr    = aws_instance.redis.private_ip
-    queue_type    = var.worker_queue_type
-    mode          = var.worker_mode
+    worker_image    = var.worker_image
+    redis_private_ip = aws_instance.redis.private_ip
+    queue_type      = var.worker_queue_type
+    mode            = var.worker_mode
   }))
 
   tag_specifications {
