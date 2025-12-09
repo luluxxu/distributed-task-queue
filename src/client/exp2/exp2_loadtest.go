@@ -5,24 +5,35 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 )
 
 const (
-	baseURL        = "http://localhost:8080"
-	taskSubmitURL  = baseURL + "/task/fifo"
-	queueStatusURL = baseURL + "/queue/status"
-	totalTasks     = 500
+	totalTasks = 500
 )
 
 type QueueStatus struct {
+	FIFO         int64 `json:"fifo_queue_length"`
+	Priority     int64 `json:"priority_queue_length"`
 	TotalBacklog int64 `json:"total_backlog"`
 }
 
 func main() {
+	// Get API endpoint from environment variable
+	baseURL := os.Getenv("API_ENDPOINT")
+	if baseURL == "" {
+		baseURL = "http://localhost:8080"
+	}
+	fmt.Println("Using API endpoint:", baseURL)
+
+	// Only submit to FIFO queue (not priority queue)
+	taskSubmitURL := baseURL + "/task/fifo"
+	queueStatusURL := baseURL + "/queue/status"
+
 	client := &http.Client{Timeout: 5 * time.Second}
 
-	fmt.Printf("Experiment 2: Submitting %d tasks...\n", totalTasks)
+	fmt.Printf("Experiment 2: Submitting %d tasks to FIFO queue...\n", totalTasks)
 
 	// Submit all tasks
 	for i := 0; i < totalTasks; i++ {
@@ -38,7 +49,7 @@ func main() {
 	fmt.Println("Waiting for backlog to clear...")
 	checkCount := 0
 	for {
-		backlog := getBacklog(client)
+		backlog := getBacklog(client, queueStatusURL)
 		checkCount++
 
 		if backlog == -1 {
@@ -71,7 +82,7 @@ func main() {
 	fmt.Printf("  Throughput: %.2f tasks/sec\n", throughput)
 }
 
-func getBacklog(client *http.Client) int64 {
+func getBacklog(client *http.Client, queueStatusURL string) int64 {
 	resp, err := client.Get(queueStatusURL)
 	if err != nil {
 		return -1
@@ -79,6 +90,10 @@ func getBacklog(client *http.Client) int64 {
 	defer resp.Body.Close()
 
 	var status QueueStatus
-	json.NewDecoder(resp.Body).Decode(&status)
-	return status.TotalBacklog
+	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+		return -1
+	}
+
+	// exp 2： FIFO backlog
+	return status.FIFO
 }
