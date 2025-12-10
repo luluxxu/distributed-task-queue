@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"flag"
+	//"flag"
 	"time"
 	"github.com/go-redis/redis/v8"
 	r "github.com/yourusername/distributed-task-queue/src/redis" 
@@ -12,19 +12,20 @@ import (
 func main() {
 	// queueType := "fifo"
 	// queueType := "priority"
-	queueType := flag.String("queue", "fifo", "Queue type: fifo or priority")
-	flag.Parse()
+	// queueType := flag.String("queue", "fifo", "Queue type: fifo or priority")
+	// flag.Parse()
 	
 	r.InitRedis()
 	defer r.CloseRedis()
 
-	StartWorkerWithQueue(*queueType)
+	// StartWorkerWithQueue(*queueType)
+	StartWorker()
 }
 
 
 // StartWorker starts a worker that processes tasks from FIFO queue
 func StartWorker() {
-	StartWorkerWithQueue("fifo")
+	StartWorkerWithQueue("priority")
 }
 
 // StartWorkerWithQueue starts a worker with specified queue type
@@ -85,7 +86,7 @@ func processTask(task *models.Task) {
 
 	// Simulate work based on job type
 	if task.JobType == "short" {
-		time.Sleep(50 * time.Millisecond) // Short job: 50ms
+		time.Sleep(500 * time.Millisecond) // Short job: 50ms
 	} else if task.JobType == "long" {
 		time.Sleep(3 * time.Second) // Long job: 3 seconds
 	} else {

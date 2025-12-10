@@ -1,0 +1,24 @@
+
+aws_region = "us-west-2"
+
+# AWS Key Pair name (must exist in your AWS account)
+key_name = "taskqueue-key"
+
+# Docker images (update with your ECR repository or Docker Hub)
+api_image    = "luluxxu/dtq-api:latest"
+worker_image = "luluxxu/dtq-worker:latest"
+redis_image  = "redis:7-alpine"
+
+# Worker scaling configuration (for Experiment 2)
+worker_min_size         = 10
+worker_max_size         = 10
+worker_desired_capacity = 10
+
+# Worker configuration
+worker_queue_type = "fifo"  # or "priority"
+worker_mode       = "simple" # or "retry"
+
+# Security: Restrict API access to your IP (optional)
+# Get your IP: curl ifconfig.me
+# allowed_cidr = "YOUR_IP/32"
+

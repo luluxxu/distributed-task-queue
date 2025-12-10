@@ -1,15 +1,18 @@
 package experiments
 
 import (
-    "net/http"
-    "time"
-    "github.com/gin-gonic/gin"
-    "github.com/google/uuid"
-	models "github.com/yourusername/distributed-task-queue/src/api/models"  
-	redis "github.com/yourusername/distributed-task-queue/src/redis"  
+	// "fmt"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	models "github.com/yourusername/distributed-task-queue/src/api/models"
+	// rl "github.com/yourusername/distributed-task-queue/src/api/ratelimit"
+	redis "github.com/yourusername/distributed-task-queue/src/redis"
 )
 
-func Experiment1(router *gin.Engine){
+func Experiment1(router *gin.Engine) {
 	// associate GET HTTP method and "/task/:id" path with a handler function "getTaskById"
 	router.GET("/task/:id", getTaskByID)
 	// associate POST HTTP method and "/task/fifo" path with a handler function "postTaskFIFO"
@@ -20,6 +23,32 @@ func Experiment1(router *gin.Engine){
 
 // postTaskFIFO handles task submission from client to FIFO Queue
 func postTaskFIFO(c *gin.Context) {
+
+	// rate limit
+	// clientID := c.ClientIP()
+	// rateLimitResult, err := rl.Allow(c.Request.Context(), clientID)
+	// if err != nil {
+	// 	c.JSON(http.StatusInternalServerError, gin.H{
+	// 		"error": "rate limiter error",
+	// 	})
+	// 	return
+	// }
+
+	// Set standard rate limit headers for all responses
+	//c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", rateLimitResult.Limit))
+	//c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", rateLimitResult.Remaining))
+
+	// if !rateLimitResult.Allowed {
+	// 	// Set Retry-After header when rate limited
+	// 	c.Header("Retry-After", fmt.Sprintf("%d", rateLimitResult.RetryAfter))
+	// 	c.JSON(http.StatusTooManyRequests, gin.H{
+	// 		"error":       "rate limit exceeded",
+	// 		"remaining":   rateLimitResult.Remaining,
+	// 		"retry_after": rateLimitResult.RetryAfter,
+	// 	})
+	// 	return
+	// }
+
 	var req models.TaskRequest
 
 	// Bind and validate JSON request
@@ -108,6 +137,30 @@ func postTaskFIFO(c *gin.Context) {
 
 // postTaskPQ handles task submission to priority queue
 func postTaskPQ(c *gin.Context) {
+	// clientID := c.ClientIP()
+	// rateLimitResult, err := rl.Allow(c.Request.Context(), clientID)
+	// if err != nil {
+	// 	c.JSON(http.StatusInternalServerError, gin.H{
+	// 		"error": "rate limiter error",
+	// 	})
+	// 	return
+	// }
+
+	// Set standard rate limit headers for all responses
+	// c.Header("X-RateLimit-Limit", fmt.Sprintf("%d", rateLimitResult.Limit))
+	// c.Header("X-RateLimit-Remaining", fmt.Sprintf("%d", rateLimitResult.Remaining))
+
+	// if !rateLimitResult.Allowed {
+	// 	// Set Retry-After header when rate limited
+	// 	c.Header("Retry-After", fmt.Sprintf("%d", rateLimitResult.RetryAfter))
+	// 	c.JSON(http.StatusTooManyRequests, gin.H{
+	// 		"error":       "rate limit exceeded",
+	// 		"remaining":   rateLimitResult.Remaining,
+	// 		"retry_after": rateLimitResult.RetryAfter,
+	// 	})
+	// 	return
+	// }
+
 	var req models.TaskRequest
 
 	// Bind and validate JSON request

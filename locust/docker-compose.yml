@@ -1,0 +1,18 @@
+version: "3"
+
+services:
+  locust-master:
+    image: locustio/locust:latest
+    ports:
+      - "8089:8089"  # Web UI
+    volumes:
+      - ./locustfile.py:/mnt/locust/locustfile.py
+    command: -f /mnt/locust/locustfile.py --master -H http://product-search-alb-59769826.us-west-2.elb.amazonaws.com
+
+  locust-worker:
+    image: locustio/locust:latest
+    volumes:
+      - ./locustfile.py:/mnt/locust/locustfile.py
+    command: -f /mnt/locust/locustfile.py --worker --master-host locust-master
+    depends_on:
+      - locust-master
