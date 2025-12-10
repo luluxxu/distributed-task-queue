@@ -209,7 +209,7 @@ sudo docker logs -f dtq-worker
 
 7.3 Experiment 2 – Worker Scaling & Backlog Clearance
 
-Set different worker counts to test how long it takes to clear 500 tasks (the exp2 client will test this for you).
+Set different worker counts to test how long it takes to clear 5000 tasks (the exp2 client will test this for you).
 
 1 worker:
 
@@ -225,15 +225,18 @@ cd ../src
 export API_ENDPOINT="http://$(cd ../terraform && terraform output -raw api_public_ip):8080"
 go run ./client/exp2/exp2_loadtest.go
 
-5 workers:
+开始 Experiment 2
+1. 确认 API 正常运行
+# 在本地终端cd terraformAPI_IP=$(terraform output -raw api_public_ip)curl http://$API_IP:8080/queue/status
+应该返回：
+{"fifo_queue_length":0,"priority_queue_length":0,"total_backlog":0}
+2. 设置环境变量并运行实验
+cd src# 设置 API endpointexport API_ENDPOINT="http://$(cd ../terraform && terraform output -raw api_public_ip):8080"echo "Using API endpoint: $API_ENDPOINT"# 运行 Experiment 2go run ./client/exp2/exp2_loadtest.go
+3. 同时监控队列状态（在另一个终端）
+cd terraformAPI_IP=$(terraform output -raw api_public_ip)while true; do  clear  echo "=== $(date '+%H:%M:%S') ==="  curl -s http://$API_IP:8080/queue/status | python3 -m json.tool 2>/dev/null || curl -s http://$API_IP:8080/queue/status  echo ""  sleep 5done
+4. 监控 Worker 日志（在 worker SSH 会话中）
+# 在 worker 实例上（你已经在那里了）sudo docker logs -f dtq-worker
 
-cd ../terraform
-aws autoscaling set-desired-capacity \
-  --auto-scaling-group-name $(terraform output -raw worker_asg_name) \
-  --desired-capacity 5 \
-  --region us-west-2
-
-Run exp2_loadtest.go again and compare clearance time and throughput.
 
 7.4 Experiment 3 – Retry & Failure Injection
 

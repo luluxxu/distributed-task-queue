@@ -17,5 +17,4 @@ docker run -d --restart always \
   --name dtq-worker \
   -e REDIS_ADDR="${redis_private_ip}:6379" \
   luluxxu/dtq-worker:latest \
-  -queue=${queue_type} \
-  -mode=${mode}
+  ./worker -queue=${queue_type} -mode=${mode}

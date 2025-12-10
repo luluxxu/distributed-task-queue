@@ -162,6 +162,11 @@ resource "aws_instance" "redis" {
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.redis.id]
 
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+  }
+
   user_data = templatefile("${path.module}/user_data/redis.sh", {
     redis_image = var.redis_image
   })
@@ -178,6 +183,11 @@ resource "aws_instance" "api" {
   key_name               = var.key_name
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.api.id]
+
+  root_block_device {
+    volume_size = 20
+    volume_type = "gp3"
+  }
 
   user_data = templatefile("${path.module}/user_data/api.sh", {
     api_image        = var.api_image
@@ -199,6 +209,14 @@ resource "aws_launch_template" "worker" {
   key_name      = var.key_name
 
   vpc_security_group_ids = [aws_security_group.worker.id]
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size = 20
+      volume_type = "gp3"
+    }
+  }
 
   user_data = base64encode(templatefile("${path.module}/user_data/worker.sh", {
     worker_image    = var.worker_image

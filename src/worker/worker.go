@@ -101,12 +101,12 @@ func processTaskSimple(task *models.Task) {
 
 	// Simulate work based on job type
 	if task.JobType == "short" {
-		time.Sleep(50 * time.Millisecond) // Short job: 50ms
+		time.Sleep(500 * time.Millisecond) // Short job: 500ms
 	} else if task.JobType == "long" {
 		time.Sleep(3 * time.Second) // Long job: 3 seconds
 	} else {
 		// Unknown job type, default to short
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 
 	// Update status to success
@@ -141,12 +141,12 @@ func processTaskWithFailureAndRetry(task *models.Task) {
 
 	// Simulate work based on job type
 	if task.JobType == "short" {
-		time.Sleep(50 * time.Millisecond) // Short job: 50ms
+		time.Sleep(500 * time.Millisecond) // Short job: 500ms
 	} else if task.JobType == "long" {
 		time.Sleep(3 * time.Second) // Long job: 3 seconds
 	} else {
 		// Unknown job type, default to short
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 	}
 	// 20% chance of transient failure (can be retried)
 	u := rng.Float64() // random float number
