@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	totalTasks = 5000
+	totalTasks = 1000
 )
 
 type QueueStatus struct {
