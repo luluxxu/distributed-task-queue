@@ -225,7 +225,7 @@ cd ../src
 export API_ENDPOINT="http://$(cd ../terraform && terraform output -raw api_public_ip):8080"
 go run ./client/exp2/exp2_loadtest.go
 
-开始 Experiment 2
+ Experiment 2
 1. 确认 API 正常运行
 # 在本地终端cd terraformAPI_IP=$(terraform output -raw api_public_ip)curl http://$API_IP:8080/queue/status
 应该返回：
