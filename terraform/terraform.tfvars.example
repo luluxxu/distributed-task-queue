@@ -5,8 +5,8 @@ aws_region = "us-west-2"
 key_name = "taskqueue-key"
 
 # Docker images (update with your ECR repository or Docker Hub)
-api_image    = "luluxxu/dtq-api:latest"
-worker_image = "luluxxu/dtq-worker:latest"
+api_image    = "guangmei/dtq-api:latest"
+worker_image = "guangmei/dtq-worker:latest"
 redis_image  = "redis:7-alpine"
 
 # Worker scaling configuration (for Experiment 2)

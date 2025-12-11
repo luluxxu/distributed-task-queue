@@ -163,7 +163,7 @@ resource "aws_instance" "redis" {
   vpc_security_group_ids = [aws_security_group.redis.id]
 
   root_block_device {
-    volume_size = 20
+    volume_size = 30
     volume_type = "gp3"
   }
 
@@ -185,7 +185,7 @@ resource "aws_instance" "api" {
   vpc_security_group_ids = [aws_security_group.api.id]
 
   root_block_device {
-    volume_size = 20
+    volume_size = 30
     volume_type = "gp3"
   }
 
@@ -213,7 +213,7 @@ resource "aws_launch_template" "worker" {
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
-      volume_size = 20
+      volume_size = 30
       volume_type = "gp3"
     }
   }
